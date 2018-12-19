@@ -35,9 +35,9 @@ class Dnn(object):
     def initialize_parameters(self):
         # np.random.seed(1)
         for l in range(1, self.__L + 1):
-            # 0.01 is just an experience
-            self.__parameters['W' + str(l)] = np.random.randn(self.__layer_dims[l], self.__layer_dims[l - 1]) / np.sqrt(
-                self.__layer_dims[l - 1])
+            # avoid gradient explosion and gradient disappear
+            self.__parameters['W' + str(l)] = np.random.randn(self.__layer_dims[l], self.__layer_dims[l - 1]) * np.sqrt(
+                2/self.__layer_dims[l - 1])
             self.__parameters['b' + str(l)] = np.zeros((self.__layer_dims[l], 1))
         # print(self.__parameters)
 
