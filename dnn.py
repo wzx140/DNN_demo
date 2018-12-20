@@ -3,9 +3,15 @@ from util import *
 
 
 @unique
-class ACTIVATIONS(Enum):
+class ACTIVATION(Enum):
     RELU = 0
     SIGMOID = 1
+
+
+@unique
+class REGULARIZATION(Enum):
+    L2 = 0
+    DROPOUT = 1
 
 
 class Dnn(object):
@@ -13,9 +19,11 @@ class Dnn(object):
     deep neural network
     """
 
-    def __init__(self, layer_dims: list):
+    def __init__(self, layer_dims: list, keep_prob: float = 1, lambd: float = 0):
         """
-        init the class
+        This can not happen:
+            1. keep_prob != 1 and lambd != 0
+            2. keep_prob > 1
 
         :param layer_dims: the dimensions of each layer in dnn
         """
@@ -23,9 +31,26 @@ class Dnn(object):
         self.__parameters = {}
         self.__m = 0
         self.__layer_dims = layer_dims
+
         # number of layers except input layer
         self.__L = len(layer_dims) - 1
         self.__AL = None
+
+        # operate regularization
+        assert (0 <= keep_prob <= 1)
+        assert (keep_prob == 1 or lambd == 0)
+        if keep_prob != 1:
+            self.__reg = True
+            self.__regularization = REGULARIZATION.DROPOUT
+            self.__keep_prob = keep_prob
+            self.__D = [1] * (self.__L - 1)
+        elif lambd != 0:
+            self.__reg = True
+            self.__regularization = REGULARIZATION.L2
+            self.__lambd = lambd
+        else:
+            self.__reg = False
+
         # store z and a_prev
         Z_cache = [0] * self.__L
         a_prev_cache = [0] * self.__L
@@ -37,7 +62,7 @@ class Dnn(object):
         for l in range(1, self.__L + 1):
             # avoid gradient explosion and gradient disappear
             self.__parameters['W' + str(l)] = np.random.randn(self.__layer_dims[l], self.__layer_dims[l - 1]) * np.sqrt(
-                2/self.__layer_dims[l - 1])
+                2. / self.__layer_dims[l - 1])
             self.__parameters['b' + str(l)] = np.zeros((self.__layer_dims[l], 1))
         # print(self.__parameters)
 
@@ -52,12 +77,12 @@ class Dnn(object):
         :return:
         """
 
-        if activation == ACTIVATIONS.SIGMOID:
-            Z = np.dot(W, A_prev) + b
+        Z = np.dot(W, A_prev) + b
+
+        if activation == ACTIVATION.SIGMOID:
             A = sigmoid(Z)
 
-        elif activation == ACTIVATIONS.RELU:
-            Z = np.dot(W, A_prev) + b
+        elif activation == ACTIVATION.RELU:
             A = relu(Z)
 
         return A, Z
@@ -76,13 +101,19 @@ class Dnn(object):
         for l in range(1, self.__L):
             A_prev = A
             A, Z = self.__forward(A_prev, self.__parameters['W' + str(l)], self.__parameters['b' + str(l)],
-                                  ACTIVATIONS.RELU)
+                                  ACTIVATION.RELU)
+            if self.__reg and self.__regularization == REGULARIZATION.DROPOUT:
+                keep_prob = self.__keep_prob
+                D = np.random.rand(A.shape[0], A.shape[1]) < keep_prob
+                A *= D
+                A /= keep_prob
+                self.__D[l - 1] = D
             a_prev_cache[l - 1] = A_prev
             Z_cache[l - 1] = Z
 
         # last layer use sigmoid function
         AL, Z = self.__forward(A, self.__parameters['W' + str(self.__L)], self.__parameters['b' + str(self.__L)],
-                               ACTIVATIONS.SIGMOID)
+                               ACTIVATION.SIGMOID)
         a_prev_cache[-1] = A
         Z_cache[-1] = Z
         self.__AL = AL
@@ -91,12 +122,30 @@ class Dnn(object):
         """
         compute the cost
 
+        :param reg: use regularization not
         :return:
         """
-        AL = self.__AL
         assert (self.__m == Y.shape[1])
-        cost = (1. / self.__m) * (-np.dot(Y, np.log(AL).T) - np.dot(1 - Y, np.log(1 - AL).T))
+        AL = self.__AL
+
+        if self.__reg:
+            if self.__regularization == REGULARIZATION.L2:
+                # calculate norm L2
+                norm = 0.
+                for l in range(1, self.__L + 1):
+                    norm += np.sum(self.__parameters['W' + str(l)] ** 2)
+
+                cost = (1. / self.__m) * (-np.dot(Y, np.log(AL).T) - np.dot(1 - Y, np.log(1 - AL).T)) + 1 / (
+                        2 * self.__m) * self.__lambd * norm
+
+            if self.__regularization == REGULARIZATION.DROPOUT:
+                # it does not have any meaning
+                return None
+        else:
+            cost = (1. / self.__m) * (-np.dot(Y, np.log(AL).T) - np.dot(1 - Y, np.log(1 - AL).T))
+
         cost = np.squeeze(cost)
+
         return cost
 
     def __backward(self, dA, A_prev, Z, W, activation):
@@ -111,16 +160,26 @@ class Dnn(object):
         :return:
         """
 
-        if activation == ACTIVATIONS.SIGMOID:
+        if activation == ACTIVATION.SIGMOID:
             dZ = sigmoid_backward(dA, Z)
-            dW = 1. / self.__m * np.dot(dZ, A_prev.T)
-            db = 1. / self.__m * np.sum(dZ, axis=1, keepdims=True)
-            dA_prev = np.dot(W.T, dZ)
-        elif activation == ACTIVATIONS.RELU:
+
+            if self.__reg and self.__regularization == REGULARIZATION.L2:
+                dW = 1. / self.__m * np.dot(dZ, A_prev.T) + self.__lambd / self.__m * W
+
+            else:
+                dW = 1. / self.__m * np.dot(dZ, A_prev.T)
+
+        elif activation == ACTIVATION.RELU:
             dZ = relu_backward(dA, Z)
-            dW = 1. / self.__m * np.dot(dZ, A_prev.T)
-            db = 1. / self.__m * np.sum(dZ, axis=1, keepdims=True)
-            dA_prev = np.dot(W.T, dZ)
+
+            if self.__reg and self.__regularization == REGULARIZATION.L2:
+                dW = 1. / self.__m * np.dot(dZ, A_prev.T) + self.__lambd / self.__m * W
+
+            else:
+                dW = 1. / self.__m * np.dot(dZ, A_prev.T)
+
+        db = 1. / self.__m * np.sum(dZ, axis=1, keepdims=True)
+        dA_prev = np.dot(W.T, dZ)
 
         return dA_prev, dW, db
 
@@ -137,17 +196,27 @@ class Dnn(object):
         AL = self.__AL
         # Y = Y.reshape(AL.shape)
         dAL = - (Y / AL - (1 - Y) / (1 - AL))
+        grads["dA" + str(L)] = dAL
 
         # the last layer
-        grads["dA" + str(L)], grads["dW" + str(L)], grads["db" + str(L)] = \
-            self.__backward(dAL, A_prev[-1], Z[-1], self.__parameters['W' + str(L)], ACTIVATIONS.SIGMOID)
+        grads["dA" + str(L - 1)], grads["dW" + str(L)], grads["db" + str(L)] = \
+            self.__backward(dAL, A_prev[-1], Z[-1], self.__parameters['W' + str(L)], ACTIVATION.SIGMOID)
+
+        if self.__reg and self.__regularization == REGULARIZATION.DROPOUT:
+            grads["dA" + str(L - 1)] *= self.__D[-1]
+            grads["dA" + str(L - 1)] /= self.__keep_prob
 
         # First L-1 layers
         for l in reversed(range(L - 1)):
             dA_prev_temp, dW_temp, db_temp = \
-                self.__backward(grads["dA" + str(l + 2)], A_prev[l], Z[l], self.__parameters['W' + str(l + 1)],
-                                ACTIVATIONS.RELU)
-            grads["dA" + str(l + 1)] = dA_prev_temp
+                self.__backward(grads["dA" + str(l + 1)], A_prev[l], Z[l], self.__parameters['W' + str(l + 1)],
+                                ACTIVATION.RELU)
+
+            if self.__reg and self.__regularization == REGULARIZATION.DROPOUT and l != 0:
+                dA_prev_temp *= self.__D[l - 1]
+                dA_prev_temp /= self.__keep_prob
+
+            grads["dA" + str(l)] = dA_prev_temp
             grads["dW" + str(l + 1)] = dW_temp
             grads["db" + str(l + 1)] = db_temp
 
@@ -181,11 +250,11 @@ class Dnn(object):
         for l in range(1, self.__L):
             A_prev = A
             A, Z = self.__forward(A_prev, self.__parameters['W' + str(l)], self.__parameters['b' + str(l)],
-                                  ACTIVATIONS.RELU)
+                                  ACTIVATION.RELU)
 
         # last layer use sigmoid function
         AL, Z = self.__forward(A, self.__parameters['W' + str(self.__L)], self.__parameters['b' + str(self.__L)],
-                               ACTIVATIONS.SIGMOID)
+                               ACTIVATION.SIGMOID)
 
         probas = AL
 
