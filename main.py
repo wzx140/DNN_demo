@@ -28,8 +28,7 @@ if __name__ == '__main__':
             test_accuracy, test_predict_y = dnn.predict(test_x, test_y)
 
             print('Iteration %d' % i)
-            if cost:
-                print('Cost: %f' % cost)
+            print('Cost: %f' % cost)
             print('Train accuracy: %f' % train_accuracy)
             print('Test accuracy: %f\n' % test_accuracy)
 

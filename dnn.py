@@ -128,19 +128,15 @@ class Dnn(object):
         assert (self.__m == Y.shape[1])
         AL = self.__AL
 
-        if self.__reg:
-            if self.__regularization == REGULARIZATION.L2:
-                # calculate norm L2
-                norm = 0.
-                for l in range(1, self.__L + 1):
-                    norm += np.sum(self.__parameters['W' + str(l)] ** 2)
+        if self.__reg and self.__regularization == REGULARIZATION.L2:
+            # calculate norm L2
+            norm = 0.
+            for l in range(1, self.__L + 1):
+                norm += np.sum(self.__parameters['W' + str(l)] ** 2)
 
-                cost = (1. / self.__m) * (-np.dot(Y, np.log(AL).T) - np.dot(1 - Y, np.log(1 - AL).T)) + 1 / (
-                        2 * self.__m) * self.__lambd * norm
+            cost = (1. / self.__m) * (-np.dot(Y, np.log(AL).T) - np.dot(1 - Y, np.log(1 - AL).T)) + 1 / (
+                    2 * self.__m) * self.__lambd * norm
 
-            if self.__regularization == REGULARIZATION.DROPOUT:
-                # it does not have any meaning
-                return None
         else:
             cost = (1. / self.__m) * (-np.dot(Y, np.log(AL).T) - np.dot(1 - Y, np.log(1 - AL).T))
 
