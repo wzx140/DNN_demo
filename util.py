@@ -93,4 +93,4 @@ def load_pic(path: str = None):
                     X = np.hstack((X, temp))
 
     # print(X.shape)
-    return X
+    return X / 255
