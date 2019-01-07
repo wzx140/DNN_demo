@@ -16,4 +16,4 @@ If you use pipenv, just run `pipenv install`. Or install `numpy`, `h5py`, `scipy
 Just run `python main.py` and then it will output the array of result (the order as same as the images)
 ### More
 - It sometimes report an error the **RuntimeWarning: overflow encountered in exp**. Just ignore it
-- For further information, you can read [my blog](https://wzx140.github.io/2018/12/15/deep-neural-network/)
+- For further information, you can read [my blog](https://masterwangzx.com/2018/12/15/deep-neural-network/)
