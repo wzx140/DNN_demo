@@ -8,6 +8,7 @@ numpy = "*"
 "h5py" = "*"
 scipy = "*"
 pillow = "*"
+matplotlib = "*"
 
 [dev-packages]
 
